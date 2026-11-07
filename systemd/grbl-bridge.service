@@ -9,6 +9,7 @@ WorkingDirectory=/home/cnc/grbl-bridge
 ExecStart=/home/cnc/.venv/bin/python /home/cnc/grbl-bridge/grbl_bridge.py
 Restart=always
 RestartSec=3
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target

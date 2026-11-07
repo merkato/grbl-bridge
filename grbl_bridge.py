@@ -43,7 +43,7 @@ from grbl_core import (
 
 SERIAL_PORT = os.getenv("GRBL_PORT", "/dev/ttyUSB0")
 BAUD_RATE = int(os.getenv("GRBL_BAUD", "115200"))
-HTTP_HOST = os.getenv("BRIDGE_HOST", "0.0.0.0")
+HTTP_HOST = os.getenv("BRIDGE_HOST", "::")  # "::" = IPv6 + IPv4 (dual-stack); mDNS na Windows często daje tylko IPv6
 HTTP_PORT = int(os.getenv("BRIDGE_PORT", "8000"))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
