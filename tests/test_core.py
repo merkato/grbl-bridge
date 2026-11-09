@@ -58,6 +58,17 @@ class TestJobLifecycle(BridgeTestCase):
         self.assertEqual(self.bridge.state.job_progress, 100.0)
         self.assertFalse(self.bridge.state.job_running)
 
+    def test_long_moves_before_m5_do_not_time_out(self):
+        # M5 dostaje 'ok' dopiero po opróżnieniu planisty: 15 ruchów x 0.2 s = 3 s >> limit 0.5 s
+        self.fake.move_time = 0.2
+        self.bridge.job_line_timeout = 0.5
+        self.bridge.start_job(job_text(15))
+        self.assertTrue(wait_for(lambda: self.bridge.state.job_state != JOB_RUNNING, 10))
+        self.assertEqual(self.bridge.state.last_error, "")
+        self.assertEqual(self.bridge.state.job_state, JOB_IDLE)
+        self.assertEqual(len(self.moves_executed()), 15)
+        self.assertEqual(self.fake.executed[-1], "M5")
+
     def test_second_job_rejected_while_running(self):
         self.bridge.start_job(job_text(200))
         with self.assertRaises(CommandRejected):

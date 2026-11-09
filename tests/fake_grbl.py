@@ -5,6 +5,7 @@ Modeluje to, co istotne dla bezpieczeństwa sterowania zadaniem:
 - bufor planisty (domyślnie 15 bloków): 'ok' dopiero, gdy linia trafi do planisty,
 - wykonywanie ruchów w czasie (stan Run), feed hold z hamowaniem (Hold:1 -> Hold:0),
 - cycle start '~', soft-reset Ctrl-X (czyści bufory; w ruchu -> ALARM:3),
+- M3/M4/M5/G4 synchronizowane z planistą ('ok' po wykonaniu wszystkich ruchów),
 - alarm i $X, błąd 'error:20' dla linii zaczynających się od "BAD",
 - stan Door (otwarcie drzwi / przycisk bezpieczeństwa) wywoływany z testu.
 Lista `executed` zawiera linie faktycznie wykonane przez "maszynę".
@@ -121,7 +122,11 @@ class FakeGrbl:
 
     def _accept_pending(self):
         while self._pending and len(self._planner) < self.planner_size:
-            line = self._pending.popleft()
+            line = self._pending[0]
+            # Jak w GRBL: M3/M4/M5/G4 czekają, aż planista się opróżni (synchronizacja), 'ok' dopiero potem
+            if self._planner and line.split()[0] in ("M3", "M4", "M5", "G4"):
+                break
+            self._pending.popleft()
             if line.startswith("BAD"):
                 self._emit("error:20")
                 continue

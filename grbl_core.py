@@ -85,6 +85,12 @@ class GRBLBridge:
         self.serial = None
         self.state = MachineState()
         self.poll_interval = poll_interval
+        # Limit czekania na 'ok' dla linii zadania, liczony od chwili, gdy maszyna przestała
+        # się ruszać. M3/M4/M5/G4 dostają 'ok' dopiero po opróżnieniu planisty, więc w trakcie
+        # długiego ruchu (stan Run ze świeżym raportem statusu) limit nie biegnie.
+        self.job_line_timeout = 30.0
+        self.status_stale_after = 2.0
+        self._status_time = 0.0
         self._serial_factory = serial_factory
 
         self._wco = [0.0, 0.0, 0.0]
@@ -215,6 +221,7 @@ class GRBLBridge:
             return
 
         self.state.status = parts[0]
+        self._status_time = time.time()
         if not parts[0].startswith("Alarm"):
             self.state.alarm = None
         for p in parts[1:]:
@@ -285,10 +292,17 @@ class GRBLBridge:
                     return "error: aborted"
                 if not self._port_open() or not self._running:
                     return "error: Port zamknięty"
-                if self._is_held():
-                    deadline = time.time() + timeout  # pauza nie jest błędem komunikacji
+                if self._is_held() or self._is_moving():
+                    # pauza i trwający ruch (GRBL czeka z 'ok' na koniec planisty) nie są błędem komunikacji
+                    deadline = time.time() + timeout
                 elif time.time() > deadline:
                     return "error: Timeout odpowiedzi GRBL"
+
+    def _is_moving(self) -> bool:
+        """Maszyna wykonuje ruch, a raport statusu jest świeży (mostek nadal słyszy GRBL)."""
+        if time.time() - self._status_time > self.status_stale_after:
+            return False
+        return self.state.status.startswith(("Run", "Jog", "Home"))
 
     def _is_held(self) -> bool:
         s = self.state.status
@@ -349,7 +363,7 @@ class GRBLBridge:
         for idx, line in enumerate(lines, start=1):
             if self._job_cancel.is_set():
                 break
-            resp = self.send_gcode_line(line, timeout=30.0, abort=self._job_cancel)
+            resp = self.send_gcode_line(line, timeout=self.job_line_timeout, abort=self._job_cancel)
             if self._job_cancel.is_set():
                 break
             if resp.startswith("error"):
